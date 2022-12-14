@@ -364,7 +364,7 @@ int main()
         string row;
         getline(readFile, row);
 
-        cout << "start load data ...\n";
+        cout << "start load train data ...\n";
 
         //cout << "**************" << idx << "***************\n";
         getline(readFile, row);
@@ -380,8 +380,8 @@ int main()
         }
         
         idx++;
-        cout << "row: " << load_data.size() << ", column: " << load_data[0].size() << "\n";
-        cout << "finish load data !\n";
+        cout << "train_row: " << load_data.size() << ", train_column: " << load_data[0].size() << "\n";
+        cout << "finish load train_data !\n";
         readFile.close();
     }
     else
@@ -398,19 +398,66 @@ int main()
         int a = load_data[i][0];
         y_train.push_back(a);        
     }
+
+
+    //test 파일 읽기
+    readFile.open("test.csv");    //파일 열기
+
+    int idx=0;
+
+    if(readFile.is_open())    //파일이 열렸는지 확인
+    {
+        // 맨 윗줄 제거
+        string row;
+        getline(readFile, row);
+
+        cout << "start load test data ...\n";
+
+        //cout << "**************" << idx << "***************\n";
+        getline(readFile, row);
+        istringstream ss(row);
+
+        string num;
+        
+        while(getline(ss, num, ','))
+        {
+            //int a = atoi(num.c_str());
+            float a = stof(num);
+            load_data[idx].push_back(a);
+        }
+        
+        idx++;
+        cout << "train_row: " << load_data.size() << ", train_column: " << load_data[0].size() << "\n";
+        cout << "finish load train_data !\n";
+        readFile.close();
+    }
+    else
+        cout << "Can not open file\n";
+
+    
+    // X_train, y_train 만들기
+    y_train.clear();
+    for(int i=0; i<1; i++)
+    {
+        for(int j=1; j<load_data[i].size(); j++)
+           x_val[i].push_back(load_data[i][j]);
+
+        int a = load_data[i][0];
+        y_val.push_back(a);        
+    }
     end = chrono::steady_clock::now();
     cout << "Data reading time: " << (chrono::duration_cast<chrono::microseconds>(end-begin).count())/1000000.0f << endl;
 
 
-    cout << "[ x ]\n";
-    for(int i=0; i<X_train[0].size(); i++)
-        cout << X_train[0][i] << " ";
+    // cout << "[ x ]\n";
+    // for(int i=0; i<X_train[0].size(); i++)
+    //     cout << X_train[0][i] << " ";
     
-    kaiming_init(w1, 784);
-    kaiming_init(w2, 784);
+    // kaiming_init(w1, 784);
+    // kaiming_init(w2, 784);
 
     
-    vector<vector<float>> y_train_enc = y_train_encoded(y_train);
-    fit(X_train, y_train_enc, 2);
+    // vector<vector<float>> y_train_enc = y_train_encoded(y_train);
+    // fit(X_train, y_train_enc, 2);
 
 }
