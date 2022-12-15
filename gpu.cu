@@ -411,8 +411,11 @@ vector<vector<float>> training(vector<vector<float>> x, vector<vector<float>> y,
                     vector<float> &b1, vector<float> &b2, vector<float> &b1_grad, \
                     float &b2_grad, vector<vector<float>> &a1)
 {   
+<<<<<<< HEAD
     float* zcp;
 
+=======
+>>>>>>> d0d77ebac0c7d5bbf7ca0e3372b69065f65e7e7e
     vector<vector<float>> z = forward(x, w1, w2, a1);
     vector<vector<float>> out;
 
