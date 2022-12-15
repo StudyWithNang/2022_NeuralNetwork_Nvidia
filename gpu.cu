@@ -1,4 +1,3 @@
-%%writefile test2.cu
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
 #include <iostream>
@@ -33,15 +32,14 @@ vector<float> b1_grad(10);
 float b2_grad;
 vector<vector<float>> w1_grad(10), w2_grad(10); // w2_grad (10, 10)
 
-float* dev_w1; float* dev_out;float* dev_xx; 
-float* dev_a1;float* dev_w2; float* dev_out2;
-float* dev_z;
-int xSize = 1*784 * sizeof(float);
-int w1Size = 784*10 * sizeof(float);
-int outSize = 1*10 * sizeof(float);
 
-float* xcp; float* w1cp; float* outcp;
-float* a1cp; float* w2cp; float* out2cp;
+int otos = 1*784 * sizeof(float);
+int stot = 784*10 * sizeof(float);
+int otot = 1*10 * sizeof(float);
+int ttot = 10*10 * sizeof(float);
+
+float* x_arr, *w1_arr, *out_arr, *b1_arr, *a1_arr, *b2_arr, *w2_arr;
+float* x_dev, *w1_dev, *out_dev, *b1_dev, *a1_dev, *b2_dev, *w2_dev;
 
 
 float l1 = 0, l2 = 0;
@@ -77,25 +75,24 @@ vector<vector<float>> dot(vector<vector<float>> &a, vector<vector<float>>& b)
     return out;
 }
 
-__global__ void Dot2(float* a, float* b, float* out, int a_width, int b_width)
+__global__ void Dot2(float* a, float* b, float* out)
 {
-    int tid, tx, ty;
-    tx = blockDim.x * blockIdx.x + threadIdx.x;
-    ty = blockDim.y * blockIdx.y + threadIdx.y;
-    int DimX = gridDim.x * blockDim.x;
-    tid = DimX * ty + tx;
+    float result = a[blockIdx.x] * b[blockDim.x * blockIdx.x + threadIdx.x];
+    out[threadIdx.x*gridDim.x+blockIdx.x] = result;
 
-    float Value = 0; float AVal = 0; float BVal = 0;
+    //if(fabs(out[threadIdx.x*gridDim.x+blockIdx.x]) > 1e-9)
+    //printf("\n threadID: %d, out: %f, a: %f, b: %f ",threadIdx.x, out[threadIdx.x*gridDim.x+blockIdx.x], a[blockIdx.x], b[blockDim.x * blockIdx.x + threadIdx.x]);
+}
 
-    for (int k = 0; k < a_width; k++)
-    {
-        AVal = a[ty * a_width + k];
-        BVal = b[k * b_width + tx];
-        Value += AVal * BVal;
-        // printf("\n tid: %d, k: %d, Value: %f, MVal: %f, NVal: %f ", tid, k, Value, AVal, BVal);
+void result_dot(int b_size, int t_size, vector<vector<float>> &v, float* out){
+    float result = 0.0f;
+    for(int i=0; i<t_size; i++){
+        for(int j=0; j<b_size; j++){
+            result += out[i*b_size +j];
+        }
+        v[0].push_back(result);
+        result=0.0f;
     }
-
-    out[tid] = Value;
 }
 
 
@@ -135,155 +132,135 @@ vector<vector<float>> sigmoid(vector<vector<float>> a){
     return out;
 }
 
-void printResult(float* M, float* N, float* P)
+// void printResult(float* M, float* N, float* P)
+// {
+//     int row = 0; int col = 0;
+//     for (row = 0; row < 1; row++)
+//     {
+//         for (col = 0; col < 10; col++)
+//         {
+//             int Destindex = row * 1 + col;
+//         }
+//     }
+// }
+
+void vec2arr(vector<vector<float>> v, float* d)
 {
-    int row = 0; int col = 0;
-    for (row = 0; row < 1; row++)
+    for(int i=0; i<v.size(); i++)
     {
-        for (col = 0; col < 10; col++)
+        for(int j=0; j<v[i].size(); j++)
         {
-            int Destindex = row * 1 + col;
-            printf( "%f (= P[%d][%d]) = %f (= M[%d][%d]) + %f (= N[%d][%d]) \n", \
-            P[Destindex], row, col, M[Destindex], row, col, N[Destindex], row, col );
+            d[i*v[0].size() + j] = v[i][j];
+        }
+    }
+}
+
+void arr2vec(float* d, vector<vector<float>> &v)
+{
+    v.resize(1);
+    for(int i=0; i<10; i++)
+    {
+        v[0].push_back((float)d[i]);
+        //cout << "out: " << out[0][i] << " " << typeid(out[0][i]).name() << endl;
+    }
+}
+
+void arr_init(float* d, int size1, int size2)
+{
+    for(int i=0; i<size1; i++)
+    {
+        for(int j=0; j<size2; j++)
+        {
+            d[i*size2 + j] = 0.0f;
         }
     }
 }
 
 
 vector<vector<float>> forward(vector<vector<float>> &x, vector<vector<float>> &w1, vector<vector<float>> &w2, vector<vector<float>> &a1){
-    cout << "forward!" << endl;
     vector<vector<float>> out;
 
-    xcp = (float*)malloc(xSize); //(1, 784)
-    w1cp = (float*)malloc(w1Size); //(784, 10)
-    outcp = (float*)malloc(outSize); //(1, 10)
+    x_arr = (float*)malloc(otos); //(1, 784)
+    w1_arr = (float*)malloc(stot); //(784, 10)
+    out_arr = (float*)malloc(stot); //(784, 10)
+    b1_arr = (float*)malloc(otot);
+    a1_arr = (float*)malloc(otot);
+    b2_arr = (float*)malloc(otot);
+    w2_arr = (float*)malloc(ttot);
 
+    // int xxsize = x[0].size();
+    // int wwsize = w1[0].size();
 
-    int xxsize = x[0].size();
-    int wwsize = w1[0].size();
-    for(int i=0; i<x.size(); i++)
-    {
-        for(int j=0; j<x[i].size(); j++)
-        {
-            xcp[i*xxsize + j] = x[i][j];
-        }
-    }
-    for(int i=0; i<w1.size(); i++)
-    {
-        for(int j=0; j<w1[i].size(); j++)
-        {
+    vec2arr(x, x_arr);
+    vec2arr(w1, w1_arr);
 
-            w1cp[i*wwsize + j] = w1[i][j];
-        }
-    }
+    memset(out_arr, 0, sizeof(out_arr));
 
-    for(int i=0; i<10; i++)
-    {
-        outcp[i] = 0;
-    }
+    cudaMalloc((void**)&x_dev, otos); // 1* 784
+    cudaMalloc((void**)&w1_dev, stot); //784*10
+    cudaMalloc((void**)&out_dev, stot);// 1* 10
 
-    // for(int i=0; i<10; i++)
-    // {
-    //     for(int j=0; j<10; j++)
-    //     {
-    //         cout << "값 복사: " << w1cp[i*wwsize + j]<<"=" << w1[i][j];
-    //     }
-    // }
+    cudaMemset(x_dev, 0, otos);
+    cudaMemset(w1_dev, 0, stot);
+    cudaMemset(out_dev, 0, stot);
 
-    cudaMalloc((void**)&dev_xx, xSize);
-    cudaMalloc((void**)&dev_w1, w1Size);
-    cudaMalloc((void**)&dev_out, outSize);
+    cudaMemcpy(x_dev, x_arr, otos, cudaMemcpyHostToDevice);
+    cudaMemcpy(w1_dev, w1_arr, stot, cudaMemcpyHostToDevice);
+    cudaMemcpy(out_dev, out_arr, stot, cudaMemcpyHostToDevice);
 
-    cudaMemcpy(dev_xx, xcp, xSize, cudaMemcpyHostToDevice);
-    cudaMemcpy(dev_w1, w1cp, w1Size, cudaMemcpyHostToDevice);
-    cudaMemcpy(dev_out, outcp, outSize, cudaMemcpyHostToDevice);
-
-    dim3 Dg(1, 10, 1);
-    dim3 Db(128, 1, 1);
-    cout << "첫번째 dot" <<endl;
-    Dot2 <<<Dg, Db>>> (dev_xx, dev_w1, dev_out, 784, 10);
+    //cout << x_dev/sizeof(float) << " " << w1_dev.size()/sizeof(float) << out_dev.size()/sizeof(float);
+    Dot2 <<<784, 10>>> (x_dev, w1_dev, out_dev);
     cudaDeviceSynchronize();
-    cudaMemcpy(outcp, dev_out, outSize, cudaMemcpyDeviceToHost);
 
+    cudaMemcpy(out_arr, out_dev, stot, cudaMemcpyDeviceToHost);
     out.resize(1);
-    for(int i=0; i<10; i++)
-    {
-        out[0].push_back((float)outcp[i]);
-        //cout << "out: " << out[0][i] << " " << typeid(out[0][i]).name() << endl;
-    }
+    result_dot(784, 10, out, out_arr);
 
-    // printResult(xcp, w1cp, outcp);
+    cudaFree(x_dev); cudaFree(w1_dev); cudaFree(out_dev);
+    free(x_arr); free(w1_arr); free(out_arr);
 
-    cudaFree(dev_xx); cudaFree(dev_w1); cudaFree(dev_out);
-    free(xcp); free(w1cp); free(outcp);
-
-    
     sumb(out, b1, out); //(1, 10)
-    //cout << out[0][0] << endl;
+
+    //////////////////////////////////////////////////////////////////////////////////
+    
     a1 = sigmoid(out); //(1,10)
 
-    //-----------------------------------------------------------------------------------------------------------------------------두번째 dot
-    int a1cp_Size = 10*sizeof(float);
-    int w2cp_Size = 100*sizeof(float);
 
-    a1cp = (float*)malloc(a1cp_Size); //(1,10)
-    w2cp = (float*)malloc(w2cp_Size); //(10, 10)
-    out2cp = (float*)malloc(outSize); //(1, 10)
+    //-----------------------------------------------------------------------------------------------------------------------------두번째 dot    
+    vec2arr(a1, a1_arr);
+    vec2arr(w2, w2_arr);
+    
+    float* out2_arr = (float*)malloc(ttot); //(10, 10)
+    memset(out2_arr, 0, sizeof(out2_arr));
+    float* out2_dev;
+    //arr_init(out2_arr, 10, 10);
+   
 
-    int a1size = a1[0].size();
-    int w2size = w2[0].size();
+    cudaMalloc((void**)&a1_dev, otot); //(1,10)
+    cudaMalloc((void**)&w2_dev, ttot); //(10,10)
+    cudaMalloc((void**)&out2_dev, ttot); //(10,10)
 
-    for(int i=0; i<a1.size(); i++)
-    {
-        for(int j=0; j<a1[i].size(); j++)
-        {
-            a1cp[i*a1size + j] = a1[i][j];
-        }
-    }
-    for(int i=0; i<w2.size(); i++)
-    {
-        for(int j=0; j<w2[i].size(); j++)
-        {
+    cudaMemcpy(a1_dev, a1_arr, otot, cudaMemcpyHostToDevice);
+    cudaMemcpy(w2_dev, w2_arr, ttot, cudaMemcpyHostToDevice);
+    cudaMemcpy(out2_dev, out2_arr, ttot, cudaMemcpyHostToDevice);
 
-            w2cp[i*w2size + j] = w2[i][j];
-        }
-    }
-    for(int i=0; i<10; i++)
-    {
-        out2cp[i] = 0;
-    }
-
-    cudaMalloc((void**)&dev_a1, a1cp_Size);
-    cudaMalloc((void**)&dev_w2, w2cp_Size);
-    cudaMalloc((void**)&dev_out2, outSize);
-
-    cudaMemcpy(dev_a1, a1cp, a1cp_Size, cudaMemcpyHostToDevice);
-    cudaMemcpy(dev_w2, w2cp, w2cp_Size, cudaMemcpyHostToDevice);
-    cudaMemcpy(dev_out2, out2cp, outSize, cudaMemcpyHostToDevice);
-
-    dim3 Dg2(4, 25, 1);
-    dim3 Db2(1, 1, 1);
-    cout << "두번째 dot" <<endl;
-    Dot2 <<<Dg2, Db2>>> (dev_a1, dev_w2, dev_out2, 10, 10);
+    Dot2 <<<10, 10>>> (a1_dev, w2_dev, out2_dev);
     cudaDeviceSynchronize();
-    cudaMemcpy(out2cp, dev_out2, outSize, cudaMemcpyDeviceToHost);
-
+    cudaMemcpy(out2_arr, out2_dev, ttot, cudaMemcpyDeviceToHost);
+    
+    out.clear();
     out.resize(1);
-    for(int i=0; i<10; i++)
-    {
-        out[0].push_back((float)out2cp[i]);
-        //cout << "out: " << out[0][i] << " " << typeid(out[0][i]).name() << endl;
-    }
+    result_dot(10, 10, out, out2_arr);
 
     // printResult(a1cp, w2cp, out2cp);
     // out = dot(a1, w2); //w2:(10,10), out:(1,10)
     sumb(out, b2, out);
-    //summ(out, b2, out); //b2,out: (1,10)
-    cudaFree(dev_a1); cudaFree(dev_w2); cudaFree(dev_out2);
-    free(a1cp); free(w2cp); free(out2cp);
+    cudaFree(a1_dev); cudaFree(w2_dev); cudaFree(out2_dev);
+    free(a1_arr); free(w2_arr); free(out2_arr);
     
     return out;  //(1,10)
 }
+
 
 vector<vector<float>> softmax(vector<vector<float>> a){
     float total = 0.0f;
@@ -308,54 +285,6 @@ vector<vector<float>> softmax(vector<vector<float>> a){
     }
 
     return out;
-}
-
-__global__ void SoftMax(float* a, float* out){
-
-    int tid, tx, ty;
-    tx = blockDim.x * blockIdx.x + threadIdx.x;
-    ty = blockDim.y * blockIdx.y + threadIdx.y;
-    int DimX = gridDim.x * blockDim.x;
-    tid = DimX * ty + tx;
-
-    float total = 0.0f; float ZVal = 0;
-
-    for (int k = 0; k < DimX; k++)
-    {
-        ZVal = a[ty * DimX + k];
-        out[ty * DimX + k] = expf(ZVal);
-        total += expf(ZVal);
-        // printf("\n tid: %d, k: %d, Value: %f, MVal: %f, NVal: %f ", tid, k, Value, AVal, BVal);
-    }
-
-    for(int k=0; k<DimX; k++)
-    {
-        out[ty * DimX + k] /= total;
-    }
-
-    // for(int i=0; i<a.size(); i++)
-    // {
-    //     out.push_back(vector<float>());
-    //     for(int j=0;j<a[i].size();j++)
-    //     {
-    //         out[i].push_back(exp(a[i][j]));  //expf
-    //         total += out[i].back();
-    //     }
-    // }
-    // for (int k = 0; k < DimX; k++)
-    // {
-    //     out[ty * DimX + k]/= total;
-    //     // printf("\n tid: %d, k: %d, Value: %f, MVal: %f, NVal: %f ", tid, k, Value, AVal, BVal);
-    // }
-    // out[tid]/= total;
-
-    // for(int i=0;i<out.size();i++)
-    // {
-    //     for(int j=0;j<out[i].size();j++)
-    //     {
-    //         out[i][j] /= total;
-    //     }
-    // }
 }
 
 vector<vector<float>> y_train_encoded(vector<float> &y){
@@ -411,83 +340,21 @@ vector<vector<float>> training(vector<vector<float>> x, vector<vector<float>> y,
                     vector<float> &b1, vector<float> &b2, vector<float> &b1_grad, \
                     float &b2_grad, vector<vector<float>> &a1)
 {   
-<<<<<<< HEAD
-    float* zcp;
-
-=======
->>>>>>> d0d77ebac0c7d5bbf7ca0e3372b69065f65e7e7e
     vector<vector<float>> z = forward(x, w1, w2, a1);
-    vector<vector<float>> out;
 
-    int zcp_Size = z.size()*z[0].size()*sizeof(float);
-    // for(int j=0; j<10; j++)
-    // {
-    //     cout << z[0][j] << " ";
-    // }
-    // cout << endl;
-
-    cout << "softmax!" << endl;
-    
-    zcp = (float*)malloc(zcp_Size);
-    outcp = (float*)malloc(zcp_Size);
-
-    for(int i=0; i<z.size(); i++)
-    {
-        for(int j=0; j<z[i].size(); j++)
-        {
-            zcp[i*z[i].size() + j] = z[i][j];
-        }
-    }
-
-    cudaMalloc((void**)&dev_z, zcp_Size);
-    cudaMalloc((void**)&dev_out, zcp_Size);
-
-    cudaMemcpy(dev_z, zcp, zcp_Size, cudaMemcpyHostToDevice);
-
-    dim3 Dg(1, 10, 1);
-    dim3 Db(10, 10, 1);
-
-    SoftMax <<<Dg, Db>>> (dev_z, dev_out);
-    cudaDeviceSynchronize();
-    cudaMemcpy(outcp, dev_out, zcp_Size, cudaMemcpyDeviceToHost);
-
-    out.resize(1);
-    for(int i=0; i<10; i++)
-    {
-        out[0].push_back((float)outcp[i]);
-        //cout << "out: " << out[0][i] << " " << typeid(out[0][i]).name() << endl;
-    }
-
-    printResult(dev_z, dev_out, dev_out);
-
-    cudaFree(dev_z); cudaFree(dev_out);
-    free(zcp); free(outcp);
-
-    for(int i=0; i<out.size(); i++)
-    {
-        for(int j=0; j<out[i].size(); j++)
-        {
-            cout << out[i][j] << " ";
-        }
-        cout << endl;
-    }
-
-    //ector<vector<float>> a = softmax(z, a);
+    vector<vector<float>> a = softmax(z);
     vector<vector<float>> err(y.size());
-    
 
     for(int i=0; i<y.size(); i++)
     {
         for(int j=0; j<y[i].size(); j++)
         {
-            err[i].push_back(-(y[i][j]-out[i][j]));
+            err[i].push_back(-(y[i][j]-a[i][j]));
         }
     }
 
-    cout << "backprop!" << endl;
     backprop(x, err, w2, w1_grad, w2_grad, b1_grad, b2_grad, a1);
 
-    cout << "tooooo busy" << endl;
     vector<vector<int>> sign1(w1.size(), vector<int>(w1[0].size(), 0));
     vector<vector<int>> sign2(w2.size(), vector<int>(w2[0].size(), 0));
     for(int i=0; i<w1.size(); i++)
@@ -545,7 +412,7 @@ vector<vector<float>> training(vector<vector<float>> x, vector<vector<float>> y,
         b2[i] -= lr * b2_grad;
     }
 
-    return out;
+    return a;
 }
 
 float reg_loss(vector<vector<float>> w1, vector<vector<float>> w2)
@@ -628,7 +495,7 @@ void fit(vector<vector<float>> &x_val, vector<vector<float>> &y_val, vector<vect
             }
             // cout << "end for" << endl;
         }
-        cout << "train finish" <<endl;
+        cout << "epoch = " << i << endl;
         losses.push_back((loss+reg_loss(w1, w2))/smally.size());
 
         for(int j=0;j<x_val.size();j++)
@@ -756,7 +623,7 @@ int main()
     // 데이터 읽기 !
     begin = chrono::steady_clock::now();
     ifstream readFile;             //읽을 목적의 파일 선언
-    readFile.open("/content/drive/MyDrive/NN/train.csv");    //파일 열기
+    readFile.open("train.csv");    //파일 열기
 
     int idx=0;
 
@@ -809,7 +676,7 @@ int main()
     load_data.clear();
     load_data.resize(8400);
 
-    readFile.open("/content/drive/MyDrive/NN/val.csv");    //파일 열기
+    readFile.open("val.csv");    //파일 열기
 
     idx=0;
 
@@ -863,7 +730,7 @@ int main()
     load_data.resize(6720);
 
 
-    readFile.open("/content/drive/MyDrive/NN/test.csv");    //파일 열기
+    readFile.open("test.csv");    //파일 열기
 
     idx=0;
 
@@ -929,7 +796,7 @@ int main()
     // cudaMalloc((void**)&dev_w1, w1Size);
     // cudaMalloc((void**)&dev_out, outSize);
 
-    fit(x_val, y_val_enc, X_train, y_train_enc, 1);
+    fit(x_val, y_val_enc, X_train, y_train_enc, 10);
 
     // cudaFree(dev_xx); cudaFree(dev_w1); cudaFree(dev_out);
     // free(xcp); free(w1cp); free(outcp);
