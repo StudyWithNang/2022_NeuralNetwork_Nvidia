@@ -11,6 +11,9 @@
 #include <cstdlib>
 #include <random>
 #include <typeinfo>
+#include <stdlib.h> 
+
+
 
 using namespace std;
 
@@ -30,13 +33,14 @@ vector<float> b1_grad(10);
 float b2_grad;
 vector<vector<float>> w1_grad(10), w2_grad(10); // w2_grad (10, 10)
 
-float* dev_w1; float* dev_out;
-float* dev_xx;
+float* dev_w1; float* dev_out;float* dev_xx; 
+float* dev_a1;float* dev_w2; float* dev_out2;
 int xSize = 1*784 * sizeof(float);
 int w1Size = 784*10 * sizeof(float);
 int outSize = 1*10 * sizeof(float);
 
 float* xcp; float* w1cp; float* outcp;
+float* a1cp; float* w2cp; float* out2cp;
 
 
 float l1 = 0, l2 = 0;
@@ -153,12 +157,9 @@ vector<vector<float>> forward(vector<vector<float>> &x, vector<vector<float>> &w
     w1cp = (float*)malloc(w1Size); //(784, 10)
     outcp = (float*)malloc(outSize); //(1, 10)
 
-    cout << "malloc!" << endl;
 
-    int xxsize = x.size();
-    int wwsize = w1.size();
-
-    cout << "111!" << endl;
+    int xxsize = x[0].size();
+    int wwsize = w1[0].size();
     for(int i=0; i<x.size(); i++)
     {
         for(int j=0; j<x[i].size(); j++)
@@ -166,7 +167,6 @@ vector<vector<float>> forward(vector<vector<float>> &x, vector<vector<float>> &w
             xcp[i*xxsize + j] = x[i][j];
         }
     }
-    cout << "222!" << endl;
     for(int i=0; i<w1.size(); i++)
     {
         for(int j=0; j<w1[i].size(); j++)
@@ -175,28 +175,33 @@ vector<vector<float>> forward(vector<vector<float>> &x, vector<vector<float>> &w
             w1cp[i*wwsize + j] = w1[i][j];
         }
     }
-    cout << "333!" << endl;
 
     for(int i=0; i<10; i++)
     {
         outcp[i] = 0;
     }
-    cout << "444!" << endl;
 
+    // for(int i=0; i<10; i++)
+    // {
+    //     for(int j=0; j<10; j++)
+    //     {
+    //         cout << "값 복사: " << w1cp[i*wwsize + j]<<"=" << w1[i][j];
+    //     }
+    // }
 
-    cout << "cudamalloc!" << endl;
+    cudaMalloc((void**)&dev_xx, xSize);
+    cudaMalloc((void**)&dev_w1, w1Size);
+    cudaMalloc((void**)&dev_out, outSize);
+
     cudaMemcpy(dev_xx, xcp, xSize, cudaMemcpyHostToDevice);
     cudaMemcpy(dev_w1, w1cp, w1Size, cudaMemcpyHostToDevice);
     cudaMemcpy(dev_out, outcp, outSize, cudaMemcpyHostToDevice);
-    cout << "cudaMemcpy!" << endl;
 
     dim3 Dg(1, 10, 1);
     dim3 Db(128, 1, 1);
-
-    cout << "before Dot2!" << endl;
+    cout << "첫번째 dot" <<endl;
     Dot2 <<<Dg, Db>>> (dev_xx, dev_w1, dev_out, 784, 10);
     cudaDeviceSynchronize();
-    cout << "after Dot2!" << endl;
     cudaMemcpy(outcp, dev_out, outSize, cudaMemcpyDeviceToHost);
 
     out.resize(1);
@@ -206,19 +211,75 @@ vector<vector<float>> forward(vector<vector<float>> &x, vector<vector<float>> &w
         //cout << "out: " << out[0][i] << " " << typeid(out[0][i]).name() << endl;
     }
 
-    printResult(xcp, w1cp, outcp);
+    // printResult(xcp, w1cp, outcp);
 
     cudaFree(dev_xx); cudaFree(dev_w1); cudaFree(dev_out);
     free(xcp); free(w1cp); free(outcp);
 
-
-    out = dot(x, w1);
+    
     sumb(out, b1, out); //(1, 10)
     //cout << out[0][0] << endl;
     a1 = sigmoid(out); //(1,10)
-    out = dot(a1, w2); //w2:(10,10), out:(1,10)
+
+    //-----------------------------------------------------------------------------------------------------------------------------두번째 dot
+    int a1cp_Size = 10*sizeof(float);
+    int w2cp_Size = 100*sizeof(float);
+
+    a1cp = (float*)malloc(a1cp_Size); //(1,10)
+    w2cp = (float*)malloc(w2cp_Size); //(10, 10)
+    out2cp = (float*)malloc(outSize); //(1, 10)
+
+    int a1size = a1[0].size();
+    int w2size = w2[0].size();
+
+    for(int i=0; i<a1.size(); i++)
+    {
+        for(int j=0; j<a1[i].size(); j++)
+        {
+            a1cp[i*a1size + j] = a1[i][j];
+        }
+    }
+    for(int i=0; i<w2.size(); i++)
+    {
+        for(int j=0; j<w2[i].size(); j++)
+        {
+
+            w2cp[i*w2size + j] = w2[i][j];
+        }
+    }
+    for(int i=0; i<10; i++)
+    {
+        out2cp[i] = 0;
+    }
+
+    cudaMalloc((void**)&dev_a1, a1cp_Size);
+    cudaMalloc((void**)&dev_w2, w2cp_Size);
+    cudaMalloc((void**)&dev_out2, outSize);
+
+    cudaMemcpy(dev_a1, a1cp, a1cp_Size, cudaMemcpyHostToDevice);
+    cudaMemcpy(dev_w2, w2cp, w2cp_Size, cudaMemcpyHostToDevice);
+    cudaMemcpy(dev_out2, out2cp, outSize, cudaMemcpyHostToDevice);
+
+    dim3 Dg2(4, 25, 1);
+    dim3 Db2(1, 1, 1);
+    cout << "두번째 dot" <<endl;
+    Dot2 <<<Dg2, Db2>>> (dev_a1, dev_w2, dev_out2, 10, 10);
+    cudaDeviceSynchronize();
+    cudaMemcpy(out2cp, dev_out2, outSize, cudaMemcpyDeviceToHost);
+
+    out.resize(1);
+    for(int i=0; i<10; i++)
+    {
+        out[0].push_back((float)out2cp[i]);
+        //cout << "out: " << out[0][i] << " " << typeid(out[0][i]).name() << endl;
+    }
+
+    // printResult(a1cp, w2cp, out2cp);
+    // out = dot(a1, w2); //w2:(10,10), out:(1,10)
     sumb(out, b2, out);
     //summ(out, b2, out); //b2,out: (1,10)
+    cudaFree(dev_a1); cudaFree(dev_w2); cudaFree(dev_out2);
+    free(a1cp); free(w2cp); free(out2cp);
     
     return out;  //(1,10)
 }
@@ -301,7 +362,7 @@ vector<vector<float>> training(vector<vector<float>> x, vector<vector<float>> y,
                     vector<vector<float>> &w2, vector<vector<float>> &w1_grad, vector<vector<float>> &w2_grad, \
                     vector<float> &b1, vector<float> &b2, vector<float> &b1_grad, \
                     float &b2_grad, vector<vector<float>> &a1)
-{
+{   
     vector<vector<float>> z = forward(x, w1, w2, a1);
     // for(int j=0; j<10; j++)
     // {
@@ -429,8 +490,6 @@ void update_val_loss(vector<vector<float>> x_val, vector<vector<float>> y_val, v
         }
     }
     val_losses.push_back((val_loss+reg_loss(w1, w2))/y_val.size());
-
-
 }
 
 
@@ -443,7 +502,7 @@ void fit(vector<vector<float>> &x_val, vector<vector<float>> &y_val, vector<vect
         cout << ".";
 
         vector<vector<float>> smallx(1, vector<float>(784, 0.0)), smally(1, vector<float>(10, 0));
-        cout << "x size is " << x.size() << endl;
+        // cout << "x size is " << x.size() << endl;
         int x_sizee = x.size();
         for(int j=0; j<x_sizee; j++)
         {
@@ -454,20 +513,20 @@ void fit(vector<vector<float>> &x_val, vector<vector<float>> &y_val, vector<vect
 
             trained_a = training(smallx, smally, w1, w2, w1_grad, w2_grad, b1, b2, b1_grad, b2_grad, a1_train);
 
-            cout << "after training" << endl;
+            // cout << "after training" << endl;
             float loss = 0.0f;
             for(int ii=0;ii<trained_a.size();ii++)
             {
-                cout << "first for" << endl;
+                // cout << "first for" << endl;
                 for(int jj=0;jj<trained_a[ii].size();jj++)
                 {
-                    cout << "second for" << endl;
+                    // cout << "second for" << endl;
                     loss += (-y_val[ii][jj] * log(trained_a[ii][jj]));
                 }
             }
-            cout << "end for" << endl;
+            // cout << "end for" << endl;
         }
-        
+        cout << "train finish" <<endl;
         losses.push_back((loss+reg_loss(w1, w2))/smally.size());
 
         for(int j=0;j<x_val.size();j++)
@@ -477,6 +536,7 @@ void fit(vector<vector<float>> &x_val, vector<vector<float>> &y_val, vector<vect
             update_val_loss(smallx, smally, w1, w2, b1, b2, a1_train);
         }
         // update_val_loss(x_val, y_val, w1, w2, b1, b2, a1_val);
+        
     }
     cout << endl;
 }
@@ -763,16 +823,27 @@ int main()
     vector<vector<float>> y_val_enc = y_train_encoded(y_val);
     vector<vector<float>> y_test_enc = y_train_encoded(y_test);
 
-    cudaMalloc((void**)&dev_xx, xSize);
-    cudaMalloc((void**)&dev_w1, w1Size);
-    cudaMalloc((void**)&dev_out, outSize);
+    // cudaMalloc((void**)&dev_xx, xSize);
+    // cudaMalloc((void**)&dev_w1, w1Size);
+    // cudaMalloc((void**)&dev_out, outSize);
 
     fit(x_val, y_val_enc, X_train, y_train_enc, 1);
 
-    cudaFree(dev_xx); cudaFree(dev_w1); cudaFree(dev_out);
-    free(xcp); free(w1cp); free(outcp);
+    // cudaFree(dev_xx); cudaFree(dev_w1); cudaFree(dev_out);
+    // free(xcp); free(w1cp); free(outcp);
     cout << "training end ~ " << endl;
 
+    vector<int> result;
+    result = predict(x_test, w1, w2);
+    cout << "predict finish" << endl;
+
+    // for(int i=0; i<result.size(); i++)
+    // {
+    //     cout << result[i] << endl;
+    // }
+    float plz = score(result, y_test_enc);
+    cout << "score : " << plz << endl;
+    cout << "the end ~ " << endl;
 
     return 0;
 }
