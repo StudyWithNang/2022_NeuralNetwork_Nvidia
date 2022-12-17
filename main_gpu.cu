@@ -1,5 +1,3 @@
-#include <thrust/host_vector.h>
-#include <thrust/device_vector.h>
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -41,12 +39,10 @@ int ttoo = 10*1 * sizeof(float);
 
 float* x_arr, *w1_arr, *out_arr, *b1_arr, *a1_arr, *b2_arr, *w2_arr, *sout_arr, *sout2_arr;
 float* x_dev, *w1_dev, *out_dev, *b1_dev, *a1_dev, *b2_dev, *w2_dev, *sout_dev, *sout2_dev;
-
-
 float l1 = 0, l2 = 0;
 
 
-
+// 전치행렬 만들기
 vector<vector<float>> transpose(vector<vector<float>>& a)
 {
     vector<vector<float>> ret(a[0].size(), vector<float>(a.size()));
@@ -59,6 +55,9 @@ vector<vector<float>> transpose(vector<vector<float>>& a)
     }
     return ret;
 }
+
+
+// 행렬 곱 연산 함수
 vector<vector<float>> dot(vector<vector<float>> &a, vector<vector<float>>& b)
 {
     vector<vector<float>> out(a.size(), vector<float>(b[0].size(), 0.0f));
@@ -80,9 +79,6 @@ __global__ void Dot2(float* a, float* b, float* out)
 {
     float result = a[blockIdx.x] * b[blockDim.x * blockIdx.x + threadIdx.x];
     out[threadIdx.x*gridDim.x+blockIdx.x] = result;
-
-    //if(fabs(out[threadIdx.x*gridDim.x+blockIdx.x]) > 1e-9)
-    //printf("\n threadID: %d, out: %f, a: %f, b: %f ",threadIdx.x, out[threadIdx.x*gridDim.x+blockIdx.x], a[blockIdx.x], b[blockDim.x * blockIdx.x + threadIdx.x]);
 }
 
 __global__ void Dot3(float* a, float* b, float* out, int height)
@@ -91,7 +87,6 @@ __global__ void Dot3(float* a, float* b, float* out, int height)
     {
         float result = a[i] * b[i * blockIdx.x + threadIdx.x];
         out[i * blockDim.x + threadIdx.x] = result;
-        //printf("\n threadID: %d, out: %d, a: %d, b: %d ",threadIdx.x, out[i * blockIdx.x + i], a[i], b[i * blockIdx.x + threadIdx.x]);
     }
 }
 
@@ -106,6 +101,8 @@ void result_dot(int b_size, int t_size, vector<vector<float>> &v, float* out){
     }
 }
 
+
+// 행렬 합 연산 함수
 __global__ void Sumb2(float* a, float* b, float* out)
 {
     int tid, tx, ty;
@@ -116,6 +113,8 @@ __global__ void Sumb2(float* a, float* b, float* out)
     out[tid] = a[tid] + b[tid];
 }
 
+
+// sigmoid 함수
 __global__ void Sigmoid(float* a, float* out)
 {
     int tid, tx, ty;
@@ -126,43 +125,8 @@ __global__ void Sigmoid(float* a, float* out)
     out[tid] = 1.0/(1.0+expf(-(a[tid]/4000)));
 }
 
-void sumb(vector<vector<float>> a, vector<float> b, vector<vector<float>>& out)
-{
-    for(int i=0;i<a.size();i++)
-    {
-        for(int j=0;j<a[i].size();j++)
-        {
-            out[i][j] = a[i][j] + b[j];
-        }
-    }
-}
 
-
-vector<vector<float>> sigmoid(vector<vector<float>> a){
-    vector<vector<float>> out(a.size(), vector<float>(a[0].size(), 0));
-    for(int i=0; i<a.size(); i++)
-    {
-        for(int j=0; j<a[i].size(); j++)
-        {
-            float tmp = a[i][j] / 4000;
-            out[i][j] = 1.0/((float)1.0+exp(-tmp));
-        }
-    }
-    return out;
-}
-
-// void printResult(float* M, float* N, float* P)
-// {
-//     int row = 0; int col = 0;
-//     for (row = 0; row < 1; row++)
-//     {
-//         for (col = 0; col < 10; col++)
-//         {
-//             int Destindex = row * 1 + col;
-//         }
-//     }
-// }
-
+// vector에서 array로 변환하는 함수
 void vec2arr(vector<vector<float>> v, float* d)
 {
     for(int i=0; i<v.size(); i++)
@@ -174,6 +138,8 @@ void vec2arr(vector<vector<float>> v, float* d)
     }
 }
 
+
+// array에서 vector로 변환하는 함수
 void arr2vec(float* d, vector<vector<float>> &v)
 {
     for(int i=0; i<v.size(); i++)
@@ -185,6 +151,8 @@ void arr2vec(float* d, vector<vector<float>> &v)
     }
 }
 
+
+// array를 0으로 초기화하는 함수
 void arr_init(float* d, int size1, int size2)
 {
     for(int i=0; i<size1; i++)
@@ -197,16 +165,16 @@ void arr_init(float* d, int size1, int size2)
 }
 
 
+// forword 함수
 vector<vector<float>> forward(vector<vector<float>> &x, vector<vector<float>> &w1, vector<vector<float>> &w2, vector<vector<float>> &a1){
     vector<vector<float>> out;
 
-    x_arr = (float*)malloc(otos); //(1, 784)
-    w1_arr = (float*)malloc(stot); //(784, 10)
-    out_arr = (float*)malloc(stot); //(784, 10)
+    x_arr = (float*)malloc(otos);
+    w1_arr = (float*)malloc(stot);
+    out_arr = (float*)malloc(stot);
     a1_arr = (float*)malloc(otot);
     b2_arr = (float*)malloc(otot);
     w2_arr = (float*)malloc(ttot);
-
 
 
     // ############## out = dot(x, w1); ##############
@@ -215,9 +183,9 @@ vector<vector<float>> forward(vector<vector<float>> &x, vector<vector<float>> &w
 
     memset(out_arr, 0, sizeof(out_arr));
 
-    cudaMalloc((void**)&x_dev, otos); // 1* 784
-    cudaMalloc((void**)&w1_dev, stot); //784*10
-    cudaMalloc((void**)&out_dev, stot);// 1* 10
+    cudaMalloc((void**)&x_dev, otos);
+    cudaMalloc((void**)&w1_dev, stot);
+    cudaMalloc((void**)&out_dev, stot);
 
     cudaMemset(x_dev, 0, otos);
     cudaMemset(w1_dev, 0, stot);
@@ -239,8 +207,6 @@ vector<vector<float>> forward(vector<vector<float>> &x, vector<vector<float>> &w
 
 
     // ############## sumb(s1, b1, sout) ##############
-
-    //sumb(out, b1, out); //(1, 10)
     float *s1_arr, *s1_dev;
     s1_arr = (float*)malloc(otot);
     b1_arr = (float*)malloc(otot);
@@ -252,9 +218,9 @@ vector<vector<float>> forward(vector<vector<float>> &x, vector<vector<float>> &w
         b1_arr[i] = b1[i];
     }
 
-    cudaMalloc((void**)&s1_dev, otot); //1*10
-    cudaMalloc((void**)&b1_dev, otot); //1*10
-    cudaMalloc((void**)&sout_dev, otot); // 1*10
+    cudaMalloc((void**)&s1_dev, otot);
+    cudaMalloc((void**)&b1_dev, otot);
+    cudaMalloc((void**)&sout_dev, otot);
 
     cudaMemcpy(s1_dev, s1_arr, otot, cudaMemcpyHostToDevice);
     cudaMemcpy(b1_dev, b1_arr, otot, cudaMemcpyHostToDevice);
@@ -272,16 +238,14 @@ vector<vector<float>> forward(vector<vector<float>> &x, vector<vector<float>> &w
 
 
     // ############## a1 = sigmoid(out); ##############  
-    //a1 = sigmoid(out); //(1,10)
-
     float *sig_arr, *sig_dev, *sigout_arr, *sigout_dev;
     sig_arr = (float*)malloc(otot);
     sigout_arr = (float*)malloc(otot);
 
     vec2arr(out, sig_arr);
 
-    cudaMalloc((void**)&sig_dev, otot); //1*10
-    cudaMalloc((void**)&sigout_dev, otot); //1*10
+    cudaMalloc((void**)&sig_dev, otot);
+    cudaMalloc((void**)&sigout_dev, otot);
 
     cudaMemcpy(sig_dev, sig_arr, otot, cudaMemcpyHostToDevice);
     cudaMemcpy(sigout_dev, sigout_arr, otot, cudaMemcpyHostToDevice);
@@ -300,14 +264,14 @@ vector<vector<float>> forward(vector<vector<float>> &x, vector<vector<float>> &w
     vec2arr(a1, a1_arr);
     vec2arr(w2, w2_arr);
     
-    float* out2_arr = (float*)malloc(ttot); //(10, 10)
+    float* out2_arr = (float*)malloc(ttot);
     memset(out2_arr, 0, sizeof(out2_arr));
     float* out2_dev;
    
 
-    cudaMalloc((void**)&a1_dev, otot); //(1,10)
-    cudaMalloc((void**)&w2_dev, ttot); //(10,10)
-    cudaMalloc((void**)&out2_dev, ttot); //(10,10)
+    cudaMalloc((void**)&a1_dev, otot);
+    cudaMalloc((void**)&w2_dev, ttot);
+    cudaMalloc((void**)&out2_dev, ttot);
 
     cudaMemcpy(a1_dev, a1_arr, otot, cudaMemcpyHostToDevice);
     cudaMemcpy(w2_dev, w2_arr, ttot, cudaMemcpyHostToDevice);
@@ -324,9 +288,8 @@ vector<vector<float>> forward(vector<vector<float>> &x, vector<vector<float>> &w
     cudaFree(a1_dev); cudaFree(w2_dev); cudaFree(out2_dev);
     free(a1_arr); free(w2_arr); free(out2_arr);
 
+
     // ############## sumb(out, b2, out); ##############
-    
-    //float *s1_arr, *s1_dev;
     s1_arr = (float*)malloc(otot);
     b2_arr = (float*)malloc(otot);
     sout_arr = (float*)malloc(otot);
@@ -337,9 +300,9 @@ vector<vector<float>> forward(vector<vector<float>> &x, vector<vector<float>> &w
         b2_arr[i] = b2[i];
     }
 
-    cudaMalloc((void**)&s1_dev, otot); //1*10
-    cudaMalloc((void**)&b2_dev, otot); //1*10
-    cudaMalloc((void**)&sout_dev, otot); // 1*10
+    cudaMalloc((void**)&s1_dev, otot);
+    cudaMalloc((void**)&b2_dev, otot);
+    cudaMalloc((void**)&sout_dev, otot);
 
     cudaMemcpy(s1_dev, s1_arr, otot, cudaMemcpyHostToDevice);
     cudaMemcpy(b2_dev, b2_arr, otot, cudaMemcpyHostToDevice);
@@ -355,10 +318,11 @@ vector<vector<float>> forward(vector<vector<float>> &x, vector<vector<float>> &w
     cudaFree(b2_dev); cudaFree(sout_dev); cudaFree(s1_dev);
     free(b2_arr); free(sout_arr); free(s1_arr);
     
-    return out;  //(1,10)
+    return out;
 }
 
 
+// softmax 함수
 vector<vector<float>> softmax(vector<vector<float>> a){
     float total = 0.0f;
     vector<vector<float>> out;
@@ -384,6 +348,8 @@ vector<vector<float>> softmax(vector<vector<float>> a){
     return out;
 }
 
+
+// y label one-hot encoding 전처리 함수
 vector<vector<float>> y_train_encoded(vector<float> &y){
     vector<vector<float>> output(y.size(), vector<float>(10, 0));
 
@@ -394,6 +360,8 @@ vector<vector<float>> y_train_encoded(vector<float> &y){
     return output;
 }
 
+
+// backpropagation 함수 -> gradiant 계산하기 
 void backprop(vector<vector<float>> x, vector<vector<float>> err, vector<vector<float>> &w2, vector<vector<float>> &w1_grad,\
              vector<vector<float>> &w2_grad, vector<float> &b1_grad, float &b2_grad, vector<vector<float>> &a1){
     for(int i=0; i<err.size(); i++)
@@ -407,6 +375,7 @@ void backprop(vector<vector<float>> x, vector<vector<float>> err, vector<vector<
 
     vector<vector<float>> a1T = transpose(a1);
 
+
     // ############## w2_grad = dot(a1T, err); ##############
     float *a1T_arr, *a1T_dev, *err_arr, *err_dev, *w2g_arr, *w2g_dev;
     a1T_arr = (float*)malloc(ttoo);
@@ -417,9 +386,9 @@ void backprop(vector<vector<float>> x, vector<vector<float>> err, vector<vector<
     vec2arr(err, err_arr);
     memset(w2g_arr, 0, sizeof(w2g_arr));
 
-    cudaMalloc((void**)&a1T_dev, ttoo); // 10*1
-    cudaMalloc((void**)&err_dev, otot); // 1*10
-    cudaMalloc((void**)&w2g_dev, ttot); // 10*10
+    cudaMalloc((void**)&a1T_dev, ttoo);
+    cudaMalloc((void**)&err_dev, otot);
+    cudaMalloc((void**)&w2g_dev, ttot);
 
     cudaMemset(a1T_dev, 0, ttoo);
     cudaMemset(err_dev, 0, otot);
@@ -442,7 +411,7 @@ void backprop(vector<vector<float>> x, vector<vector<float>> err, vector<vector<
 
 
     vector<vector<float>> w2T = transpose(w2);
-    vector<vector<float>> err_to_hidden = dot(err, w2T); //err_to_hidden(1, 10)
+    vector<vector<float>> err_to_hidden = dot(err, w2T);
 
     for(int i=0; i<a1.size(); i++)
     {
@@ -451,9 +420,10 @@ void backprop(vector<vector<float>> x, vector<vector<float>> err, vector<vector<
             err_to_hidden[i][j] *= a1[i][j] * (1-a1[i][j]);
         }
     }
+
     vector<vector<float>> xT = transpose(x);
     w1_grad = dot(xT, err_to_hidden);
-    for(int j=0; j<err_to_hidden[0].size(); j++) //b1_grad(10);
+    for(int j=0; j<err_to_hidden[0].size(); j++)
     {
         b1_grad[j] = 0.0f;
         for(int i=0; i<err_to_hidden.size(); i++)
@@ -463,16 +433,19 @@ void backprop(vector<vector<float>> x, vector<vector<float>> err, vector<vector<
     }
 }
 
+
+// training 함수
 vector<vector<float>> training(vector<vector<float>> x, vector<vector<float>> y, vector<vector<float>> &w1, \
                     vector<vector<float>> &w2, vector<vector<float>> &w1_grad, vector<vector<float>> &w2_grad, \
                     vector<float> &b1, vector<float> &b2, vector<float> &b1_grad, \
                     float &b2_grad, vector<vector<float>> &a1)
 {   
-    vector<vector<float>> z = forward(x, w1, w2, a1);
+    vector<vector<float>> z = forward(x, w1, w2, a1);                               // forward 진행
 
-    vector<vector<float>> a = softmax(z);
+    vector<vector<float>> a = softmax(z);                                           // forward 진행한 값을 softmax 수행
+
+    // cross entropy로 오차 구하기
     vector<vector<float>> err(y.size());
-
     for(int i=0; i<y.size(); i++)
     {
         for(int j=0; j<y[i].size(); j++)
@@ -481,8 +454,9 @@ vector<vector<float>> training(vector<vector<float>> x, vector<vector<float>> y,
         }
     }
 
-    backprop(x, err, w2, w1_grad, w2_grad, b1_grad, b2_grad, a1);
+    backprop(x, err, w2, w1_grad, w2_grad, b1_grad, b2_grad, a1);                   // backpropagation 진행
 
+    // 계산한 gradiant를 가지고 weight와 bias 업데이트
     vector<vector<int>> sign1(w1.size(), vector<int>(w1[0].size(), 0));
     vector<vector<int>> sign2(w2.size(), vector<int>(w2[0].size(), 0));
     for(int i=0; i<w1.size(); i++)
@@ -531,6 +505,7 @@ vector<vector<float>> training(vector<vector<float>> x, vector<vector<float>> y,
             w2[i][j] -= lr * w2_grad[i][j];
         }
     }
+
     for(int i=0;i<b1.size();i++)
     {
         b1[i] -= lr * b1_grad[i];
@@ -543,21 +518,21 @@ vector<vector<float>> training(vector<vector<float>> x, vector<vector<float>> y,
     return a;
 }
 
+
+// regulation 함수
 float reg_loss(vector<vector<float>> w1, vector<vector<float>> w2)
 {
     float tmp1 = 0.0f;
 
-    for(int i=0; i<w1[0].size(); i++) //~10
+    for(int i=0; i<w1[0].size(); i++)
     {
-        for(int j=0; j<w1.size(); j++) //~784
+        for(int j=0; j<w1.size(); j++)
         {
             if(w1[j][i] < 0) w1[j][i] = -w1[j][i];
-            
             tmp1 += l1*(w1[j][i]) + l2/2*pow(w1[j][i],2);
-            //tmp1 += l1*(w1[i][j]) + w2[i][j] + l2/2*pow(w1[i][j],2) + pow(w2[i][j],2);
         }
 
-        for(int j=0; j<w2[i].size(); j++) //~10
+        for(int j=0; j<w2[i].size(); j++)
         {
             if(w2[i][j] < 0) w2[i][j] = -w2[i][j];
             tmp1 += w2[i][j] + pow(w2[i][j],2);
@@ -567,11 +542,15 @@ float reg_loss(vector<vector<float>> w1, vector<vector<float>> w2)
     return tmp1;
 }
 
+
+// validation 진행 함수
 void update_val_loss(vector<vector<float>> x_val, vector<vector<float>> y_val, vector<vector<float>> &w1, vector<vector<float>> &w2, \
                     vector<float> &b1, vector<float> &b2, vector<vector<float>> &a1)
 {
-    vector<vector<float>> z = forward(x_val, w1, w2, a1);
-    vector<vector<float>> a = softmax(z);
+    vector<vector<float>> z = forward(x_val, w1, w2, a1);           // forward 진행
+
+    vector<vector<float>> a = softmax(z);                           // forward 진행한 값을 softmax 수행
+    
     float val_loss = 0.0f;
     for(int ii=0;ii<a.size();ii++)
     {
@@ -580,10 +559,11 @@ void update_val_loss(vector<vector<float>> x_val, vector<vector<float>> y_val, v
             val_loss += (-y_val[ii][jj] * log(a[ii][jj]));
         }
     }
-    val_losses.push_back((val_loss+reg_loss(w1, w2))/y_val.size());
+    val_losses.push_back((val_loss+reg_loss(w1, w2))/y_val.size());  // loss 저장
 }
 
 
+// fit 함수 -> training + update_val_loss
 void fit(vector<vector<float>> &x_val, vector<vector<float>> &y_val, vector<vector<float>> &x, vector<vector<float>> &y, int epochs){
     vector<vector<float>> trained_a(10);
     vector<float> loss(trained_a.size());
@@ -592,14 +572,14 @@ void fit(vector<vector<float>> &x_val, vector<vector<float>> &y_val, vector<vect
         float loss = 0.0f;
         cout << ".";
 
-        vector<vector<float>> smallx(1, vector<float>(784, 0.0)), smally(1, vector<float>(10, 0));
+        vector<vector<float>> smallx(1, vector<float>(784, 0.0)), smally(1, vector<float>(10, 0));  // data 한 개씩 불러오기
         int x_sizee = x.size();
         for(int j=0; j<x_sizee; j++)
         {
             smallx[0].assign(x[j].begin(), x[j].end());
             smally[0].assign(y[j].begin(), y[j].end());
 
-            trained_a = training(smallx, smally, w1, w2, w1_grad, w2_grad, b1, b2, b1_grad, b2_grad, a1_train);
+            trained_a = training(smallx, smally, w1, w2, w1_grad, w2_grad, b1, b2, b1_grad, b2_grad, a1_train);  // training 진행 
 
             float loss = 0.0f;
             for(int ii=0;ii<trained_a.size();ii++)
@@ -610,8 +590,10 @@ void fit(vector<vector<float>> &x_val, vector<vector<float>> &y_val, vector<vect
                 }
             }
         }
+
         losses.push_back((loss+reg_loss(w1, w2))/smally.size());
 
+        // validation 진행
         for(int j=0;j<x_val.size();j++)
         {
             smallx[0].assign(x_val[j].begin(), x_val[j].end());
@@ -619,9 +601,11 @@ void fit(vector<vector<float>> &x_val, vector<vector<float>> &y_val, vector<vect
             update_val_loss(smallx, smally, w1, w2, b1, b2, a1_train);
         }       
     }
+    cout << endl;
 }
 
-// n_in=784, n_out=10
+
+// weight initailization 함수
 void kaiming_init(vector<vector<float>> &w, int n_in){
     float std = sqrt(2/(float) n_in);
     
@@ -637,6 +621,8 @@ void kaiming_init(vector<vector<float>> &w, int n_in){
     }
 }
 
+
+// 학습한 모델로 예측값 도출하는 함수
 vector<int> predict(vector<vector<float>> x, vector<vector<float>> &w1, vector<vector<float>> &w2){
     vector<int> result;
     vector<vector<float>> smallx(1);
@@ -662,6 +648,8 @@ vector<int> predict(vector<vector<float>> x, vector<vector<float>> &w1, vector<v
     return result;
 }
 
+
+// 예측 값과 정답 값 비교하여 정확도 평가
 float score(vector<int> result, vector<vector<float>> y)
 {
     vector<int> resulty;
@@ -681,7 +669,6 @@ float score(vector<int> result, vector<vector<float>> y)
         resulty.push_back(idx);
     }
 
-
     int cnt = 0;
     for(int i=0; i<result.size(); i++)
     {
@@ -700,10 +687,10 @@ int main()
 {
     chrono::steady_clock::time_point begin, data_end, score_end;
 
-    // 데이터 읽기 !
+    // dataset 읽어오기
     begin = chrono::steady_clock::now();
-    ifstream readFile;             //읽을 목적의 파일 선언
-    readFile.open("train.csv");    //파일 열기
+    ifstream readFile;
+    readFile.open("train.csv");
 
     int idx=0;
 
@@ -724,7 +711,6 @@ int main()
             
             while(getline(ss, num, ','))
             {
-                //int a = atoi(num.c_str());
                 float a = stof(num);
                 load_data[idx].push_back(a);
             }
@@ -756,11 +742,11 @@ int main()
     load_data.clear();
     load_data.resize(8400);
 
-    readFile.open("val.csv");    //파일 열기
+    readFile.open("val.csv");
 
     idx=0;
 
-    if(readFile.is_open())    //파일이 열렸는지 확인
+    if(readFile.is_open())
     {
         // 맨 윗줄 제거
         string row;
@@ -768,7 +754,7 @@ int main()
 
         cout << "start load test data ...\n";
 
-        while(!readFile.eof())    //파일 끝까지 읽었는지 확인
+        while(!readFile.eof())
         {
             getline(readFile, row);
             istringstream ss(row);
@@ -805,12 +791,11 @@ int main()
     load_data.clear();
     load_data.resize(6720);
 
-
-    readFile.open("test.csv");    //파일 열기
+    readFile.open("test.csv");
 
     idx=0;
 
-    if(readFile.is_open())    //파일이 열렸는지 확인
+    if(readFile.is_open())
     {
         // 맨 윗줄 제거
         string row;
@@ -818,7 +803,7 @@ int main()
 
         cout << "start load train data ...\n";
 
-        while(!readFile.eof())    //파일 끝까지 읽었는지 확인
+        while(!readFile.eof())
         {
             getline(readFile, row);
             istringstream ss(row);
@@ -827,7 +812,6 @@ int main()
             
             while(getline(ss, num, ','))
             {
-                //int a = atoi(num.c_str());
                 float a = stof(num);
                 load_data[idx].push_back(a);
             }
@@ -888,7 +872,5 @@ int main()
     cout << "* Score\t\t\t: " << plz << endl;
     cout << "* Total time\t\t: " << (chrono::duration_cast<chrono::microseconds>(score_end-begin).count())/1000000.0f << endl;
     
-    //cout << "Total time: " << (chrono::duration_cast<chrono::microseconds>(end-begin).count())/1000000.0f << endl;
-
     return 0;
 }
