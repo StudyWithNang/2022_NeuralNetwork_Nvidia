@@ -14,7 +14,7 @@ $g++ -o main_cpu main_cpu.cpp
 $./main_cpu
 ```
 
-# GPU version 실행
+## GPU version 실행
 ```
 $nvidia -o main_gpu main_cpu.cpp
 $./main_gpu
