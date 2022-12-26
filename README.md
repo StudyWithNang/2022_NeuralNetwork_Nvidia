@@ -1,14 +1,15 @@
 # 2022_NeuralNetwork_Nvidia
 
-##### 병렬분산 프로젝트로서 **C++** 로 코드를 구현하여 **CPU**와 **GPU**에서 시간을 비교
+병렬 분산 프로젝트로써 **C++** 로 코드를 구현하여 **CPU**와 **GPU**에서 시간을 비교
 
-### 주제: 선형함수로 이루어진 신경망으로 이미지 분류  
-### Model architecture
-### : layer1 + sigmoid + layer2
+
+## 주제: 선형함수로 이루어진 신경망으로 이미지 분류  
+
+### Model architecture : layer1 + sigmoid + layer2
 ![image](https://user-images.githubusercontent.com/90039228/209432256-b02ba9aa-9bc3-435a-9930-f9cba46a9ed3.png)
 
-### Dataset: MNIST  
-(본 프로젝트에서 사용한 데이터는 train data: 26880개, validation data: 8400개, test data: 6720개로 <b>총 42000개</b>)  
+### Dataset : MNIST  
+(본 프로젝트에서는 train data 26880개, validation data 8400개, test data 6720개로 <b>총 42000개</b> 데이터를 사용함)  
 
 
 ## 프로젝트 개요 및 필요성
@@ -19,6 +20,7 @@
 
 <b>⇒ 이미지 분류를 위한 학습 과정에 많은 연산이 존재</b>  
 <b>⇒ 이에 대한 고민을 통해 CPU와 GPU에 따른 신경망 Neural Network 학습 속도를 비교함</b>  
+
 
 ## Flowchart
 ![image](https://user-images.githubusercontent.com/90039228/208378832-ab22bf29-8f63-42f8-acd8-c462e5c0e293.png)
@@ -32,9 +34,10 @@ $ ./main_cpu
 
 ## GPU version 실행
 ```
-$ nvidia -o main_gpu main_cpu.cpp
+$ nvcc -o main_gpu main_gpu.cpp
 $ ./main_gpu
 ```
+
 
 ## 실행 결과
 ### epoch : 100
@@ -44,7 +47,7 @@ $ ./main_gpu
  
 ### epoch : 200
 ![image](https://user-images.githubusercontent.com/90039228/209431819-3eb76773-859d-4341-9245-d28c0f399d3c.png)
-  * 데이터셋을 읽어오는 시간은 CPU, GPU가 각각 약 13초, 1초로 GPU가 약 12배 빠름
+  * 데이터셋을 읽어오는 시간은 CPU, GPU가 각각 약 13초, 1초로 GPU가 약 13배 빠름
   * 하지만 전체 시간은 각각 약 156분, 122분으로 34분 차이  
 
 
